@@ -12,6 +12,7 @@ import { MailIcon, ArrowLeftIcon, RefreshCwIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useForm } from "@tanstack/react-form";
 import { VerifySuccess } from "./verify-success";
+import { useVerifyEmail, useResendVerificationOtp } from "@/lib/trpc/hooks";
 
 /* -----------------------------
    Schema
@@ -30,15 +31,19 @@ export const VerifyEmail = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get("email");
+  const userId = searchParams.get("userId");
 
   const [resendCooldown, setResendCooldown] = useState(0);
   const [isVerified, setIsVerified] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
 
+  const verifyMutation = useVerifyEmail();
+  const resendMutation = useResendVerificationOtp();
+
   /* Redirect if no email */
   useEffect(() => {
-    if (!email) router.replace("/login");
-  }, [email, router]);
+    if (!email && !userId) router.replace("/login");
+  }, [email, userId, router]);
 
   /* Cooldown timer */
   useEffect(() => {
@@ -62,9 +67,19 @@ export const VerifyEmail = () => {
       const toastId = toast.loading("Verifying code...");
 
       try {
-        // Dummy verification: correct OTP is "123456"
-        await new Promise((resolve) => setTimeout(resolve, 1200));
-        if (value.otp !== "123456") throw new Error("Invalid or expired code");
+        if (userId) {
+          await verifyMutation.mutateAsync({
+            userId: userId,
+            otp: value.otp,
+          });
+        } else if (email) {
+          await verifyMutation.mutateAsync({
+            email: email,
+            otp: value.otp,
+          });
+        } else {
+          throw new Error('User ID or email is required');
+        }
 
         toast.success("Code verified", { id: toastId });
         setIsVerified(true);
@@ -77,9 +92,16 @@ export const VerifyEmail = () => {
 
   /* Resend OTP */
   const handleResend = async () => {
+    if (!userId) {
+      toast.error("User ID is required");
+      return;
+    }
+
     const toastId = toast.loading("Sending code...");
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await resendMutation.mutateAsync({
+        userId: userId,
+      });
       form.reset();
       setOtpError(null);
       setResendCooldown(COOLDOWN_SECONDS);
@@ -89,7 +111,7 @@ export const VerifyEmail = () => {
     }
   };
 
-  if (!email) return null;
+  if (!email && !userId) return null;
   if (isVerified) return <VerifySuccess />;
 
   return (
@@ -112,7 +134,7 @@ export const VerifyEmail = () => {
           >
             {/* OTP Field */}
             <form.Field name="otp">
-              {(field) => (
+              {(field: any) => (
                 <div className="space-y-3">
                   <label className="text-sm text-center block font-medium">
                     Verification code
@@ -172,9 +194,9 @@ export const VerifyEmail = () => {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={state.isSubmitting || state.otp.length !== 6}
+                  disabled={state.isSubmitting || state.otp.length !== 6 || verifyMutation.isPending}
                 >
-                  {state.isSubmitting ? (
+                  {verifyMutation.isPending ? (
                     <>
                       <Spinner className="mr-2 h-4 w-4" />
                       Verifying…
@@ -193,8 +215,18 @@ export const VerifyEmail = () => {
                 <span className="font-medium">{resendCooldown}s</span>
               </p>
             ) : (
-              <Button type="button" variant="outline" onClick={handleResend} className="w-full gap-2">
-                <RefreshCwIcon className="h-4 w-4" />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleResend}
+                className="w-full gap-2"
+                disabled={resendMutation.isPending || !userId}
+              >
+                {resendMutation.isPending ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <RefreshCwIcon className="h-4 w-4" />
+                )}
                 Resend verification code
               </Button>
             )}

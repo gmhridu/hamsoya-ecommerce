@@ -14,6 +14,7 @@ import { Spinner } from "@/components/ui/spinner";
 
 import { ArrowLeftIcon, MailIcon } from "lucide-react";
 import { toast } from "sonner";
+import { useForgotPassword } from "@/lib/trpc/hooks";
 
 /* -----------------------------
    Validation Schema
@@ -27,6 +28,7 @@ type ForgotPasswordInput = z.infer<typeof ForgotPasswordSchema>;
 
 export const ForgotPassword = () => {
   const router = useRouter();
+  const forgotPasswordMutation = useForgotPassword();
 
   const form = useForm({
     defaultValues: {
@@ -41,13 +43,11 @@ export const ForgotPassword = () => {
       const toastId = toast.loading("Sending verification code...");
 
       try {
-        /* -----------------------------
-           Dummy API request
-        --------------------------------*/
+        await forgotPasswordMutation.mutateAsync({
+          email: value.email,
+        });
 
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-
-        toast.success("We’ve sent a verification code to your email.", {
+        toast.success("We've sent a verification code to your email.", {
           id: toastId,
         });
 
@@ -55,9 +55,14 @@ export const ForgotPassword = () => {
           `/forgot-password/verify?email=${encodeURIComponent(value.email)}`,
         );
       } catch (error: any) {
-        toast.error(error?.message ?? "Something went wrong.", {
+        // Don't reveal if the email exists or not
+        toast.success("We've sent a verification code to your email.", {
           id: toastId,
         });
+
+        router.replace(
+          `/forgot-password/verify?email=${encodeURIComponent(value.email)}`,
+        );
       }
     },
   });
@@ -66,7 +71,7 @@ export const ForgotPassword = () => {
      Field Error Component
   --------------------------------*/
 
-  const FieldError = ({ field }: any) => {
+  const FieldError = ({ field }: { field: any }) => {
     if (!field.state.meta.isTouched) return null;
     if (!field.state.meta.errors.length) return null;
 
@@ -122,7 +127,7 @@ export const ForgotPassword = () => {
               {/* EMAIL FIELD */}
 
               <form.Field name="email">
-                {(field) => (
+                {(field: any) => (
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">
                       Email Address
@@ -157,9 +162,9 @@ export const ForgotPassword = () => {
                   <Button
                     type="submit"
                     className="w-full h-11"
-                    disabled={state.isSubmitting}
+                    disabled={state.isSubmitting || forgotPasswordMutation.isPending}
                   >
-                    {state.isSubmitting ? (
+                    {forgotPasswordMutation.isPending ? (
                       <>
                         <Spinner className="mr-2 size-4" />
                         Sending Code...

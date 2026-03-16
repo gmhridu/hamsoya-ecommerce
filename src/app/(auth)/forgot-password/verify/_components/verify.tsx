@@ -17,6 +17,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 
 import { toast } from "sonner";
+import { useVerifyResetOtp, useForgotPassword } from "@/lib/trpc/hooks";
 
 /* -----------------------------
    Schema
@@ -40,6 +41,9 @@ export const Verify = () => {
 
   const [resendCooldown, setResendCooldown] = useState(0);
   const [otpError, setOtpError] = useState<string | null>(null);
+
+  const verifyOtpMutation = useVerifyResetOtp();
+  const resendMutation = useForgotPassword();
 
   /* -----------------------------
      Redirect if no email
@@ -82,24 +86,20 @@ export const Verify = () => {
       const toastId = toast.loading("Verifying code...");
 
       try {
-        /* -----------------------------
-           Dummy verification
-        --------------------------------*/
-
-        await new Promise((resolve) => setTimeout(resolve, 1200));
-
-        if (value.otp !== "123456") {
-          throw new Error("Invalid or expired code");
-        }
+        const result = await verifyOtpMutation.mutateAsync({
+          email: email!,
+          otp: value.otp,
+        });
 
         toast.success("Code verified", { id: toastId });
 
+        // Navigate to reset password with the reset token
         router.push(
-          `/forgot-password/reset?email=${encodeURIComponent(email!)}`,
+          `/forgot-password/reset?email=${encodeURIComponent(email!)}&token=${encodeURIComponent(result.resetToken)}`,
         );
       } catch (error: any) {
-        setOtpError(error.message);
-        toast.error(error.message, { id: toastId });
+        setOtpError(error.message || "Invalid or expired code");
+        toast.error(error.message || "Invalid code", { id: toastId });
       }
     },
   });
@@ -112,7 +112,9 @@ export const Verify = () => {
     const toastId = toast.loading("Sending code...");
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await resendMutation.mutateAsync({
+        email: email!,
+      });
 
       setResendCooldown(COOLDOWN_SECONDS);
       setOtpError(null);
@@ -152,7 +154,7 @@ export const Verify = () => {
             {/* OTP FIELD */}
 
             <form.Field name="otp">
-              {(field) => (
+              {(field: any) => (
                 <div className="space-y-3">
                   <label className="text-sm text-center block font-medium">
                     Verification code
@@ -221,9 +223,9 @@ export const Verify = () => {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={state.isSubmitting || state.otp.length !== 6}
+                  disabled={state.isSubmitting || state.otp.length !== 6 || verifyOtpMutation.isPending}
                 >
-                  {state.isSubmitting ? (
+                  {verifyOtpMutation.isPending ? (
                     <>
                       <Spinner className="mr-2 h-4 w-4" />
                       Verifying…
@@ -248,8 +250,13 @@ export const Verify = () => {
                 variant="outline"
                 onClick={handleResend}
                 className="w-full gap-2"
+                disabled={resendMutation.isPending}
               >
-                <RefreshCwIcon className="h-4 w-4" />
+                {resendMutation.isPending ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <RefreshCwIcon className="h-4 w-4" />
+                )}
                 Resend verification code
               </Button>
             )}

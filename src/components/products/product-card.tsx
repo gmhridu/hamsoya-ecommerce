@@ -15,6 +15,10 @@ import {
 import { cn } from "@/lib/utils";
 import { Price } from "../price";
 import Link from "next/link";
+import { useCart } from "@/lib/hooks/use-cart";
+import { useBookmarks } from "@/lib/hooks/use-bookmarks";
+import { useCartStore } from "@/store/cart-store";
+import { useBookmarkStore } from "@/store/bookmark-store";
 
 interface ProductCardProps {
   product: Product;
@@ -35,15 +39,65 @@ export function ProductCard({
   const hasDiscount = false;
   const discountPercentage = 0;
 
-  const isProductBookmarked = false;
-  const isProductInCart = false;
+  // Get cart and bookmark hooks
+  const { items: cartItems, addToCart, removeFromCart, updateCartQuantity } = useCart();
+  const { toggleBookmark } = useBookmarks();
 
-  const cartQuantity = initialCartCount ?? 0;
+  // Get cart quantity for this product - use selector for proper reactivity
+  // Use a proper selector for cart item to trigger re-renders
+  const cartItem = useCartStore((state) => state.items.find(item => item.productId === product.id));
+  const actualCartQuantity = cartItem?.quantity ?? 0;
 
-  const handleToggleBookmark = () => {};
-  const handleAddToCart = () => {};
-  const handleIncrease = () => {};
-  const handleDecrease = () => {};
+  // Use a proper selector for bookmark to trigger re-renders
+  const isProductBookmarked = useBookmarkStore((state) =>
+    state.items.some((item) => item.productId === product.id)
+  );
+
+  // Use proper cart quantity
+  const isProductInCart = actualCartQuantity > 0;
+
+  const handleToggleBookmark = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    try {
+      await toggleBookmark({
+        productId: product.id,
+        name: product.name,
+        price: Number(product.price),
+        image: product.images[0],
+      });
+    } catch (error) {
+      // Error is handled in the hook with rollback
+    }
+  };
+
+  const handleAddToCart = async () => {
+    if (!product.in_stock) return;
+
+    try {
+      await addToCart({
+        productId: product.id,
+        name: product.name,
+        price: Number(product.price),
+        image: product.images[0],
+      });
+    } catch (error) {
+      // Error is handled in the hook with rollback
+    }
+  };
+
+  const handleIncrease = async () => {
+    await updateCartQuantity(product.id, actualCartQuantity + 1);
+  };
+
+  const handleDecrease = async () => {
+    if (actualCartQuantity <= 1) {
+      await removeFromCart(product.id);
+    } else {
+      await updateCartQuantity(product.id, actualCartQuantity - 1);
+    }
+  };
 
   const tagColorMap = new Map<string, string>();
 
@@ -136,9 +190,9 @@ export function ProductCard({
               <HeartIcon
                 className={cn(
                   "size-5 transition-all duration-300",
-                  isProductBookmarked && "animate-pop"
-                    ? "fill-red-500 text-red-500 scale-110"
-                    : "text-gray-600 group-hover:text-red-500",
+                  isProductBookmarked
+                    ? "fill-red-500 text-red-500 scale-110 animate-pop"
+                    : "text-gray-600 group-hover:text-red-500"
                 )}
               />
             </Button>
@@ -250,7 +304,7 @@ export function ProductCard({
                     <Button size="icon" onClick={handleDecrease}>
                       <MinusIcon className="size-3" />
                     </Button>
-                    <span className="font-semibold">{cartQuantity}</span>
+                    <span className="font-semibold">{actualCartQuantity}</span>
                     <Button size="icon" onClick={handleIncrease}>
                       <PlusIcon className="size-3" />
                     </Button>
@@ -334,9 +388,9 @@ export function ProductCard({
               <HeartIcon
                 className={cn(
                   "size-5 transition-all duration-300",
-                  isProductBookmarked && "animate-pop"
-                    ? "fill-red-500 text-red-500 scale-110"
-                    : "text-gray-600 group-hover:text-red-500",
+                  isProductBookmarked
+                    ? "fill-red-500 text-red-500 scale-110 animate-pop"
+                    : "text-gray-600 group-hover:text-red-500"
                 )}
               />
             </Button>
@@ -484,7 +538,7 @@ export function ProductCard({
             <Button size="icon" onClick={handleDecrease}>
               <MinusIcon className="size-3" />
             </Button>
-            <span className="font-semibold text-lg">{cartQuantity}</span>
+            <span className="font-semibold text-lg">{actualCartQuantity}</span>
             <Button size="icon" onClick={handleIncrease}>
               <PlusIcon className="size-3" />
             </Button>
