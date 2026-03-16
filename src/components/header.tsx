@@ -209,7 +209,7 @@ export function Header({
                     <>
                       <DropdownMenuItem asChild>
                         {/* Login route */}
-                        <Link href="/" className="cursor-pointer">
+                        <Link href="/login" className="cursor-pointer">
                           <LogInIcon className="mr-2 size-4" />
                           <span>Login / Register</span>
                         </Link>
@@ -358,7 +358,7 @@ export function Header({
                       ) : (
                         // Login route
                         <Link
-                          href="/"
+                          href="/login"
                           className="flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 hover:bg-primary/10"
                         >
                           <LogInIcon className="mr-3 h-5 w-5 text-muted-foreground" />
