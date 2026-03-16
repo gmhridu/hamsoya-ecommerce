@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useMediaQuery } from "@/hooks/use-media-query";
-import type { CartItem } from "@/types/cart.type";
 import {
   Sheet,
   SheetContent,
@@ -17,76 +15,78 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from "@/components/ui/drawer";
-import { CartTrigger } from "./cart-trigger";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ShoppingBagIcon } from "lucide-react";
 import { CartContent } from "./cart-content";
+import { useCart } from "@/lib/hooks/use-cart";
+import type { CartItem as CartItemType } from "@/types/cart.type";
 
 interface CartDrawerProps {
   cartCount: number;
 }
 
-export function CartDrawer({ cartCount }: CartDrawerProps) {
-  const [count, setCount] = useState(cartCount);
+export function CartDrawer({ cartCount: initialCount }: CartDrawerProps) {
   const isDesktop = useMediaQuery("(min-width: 768px)");
 
-  const items: CartItem[] = [
-    {
-      product: {
-        id: "1",
-        name: "Product 1",
-        description: "Product 1 description",
-        price: 100,
-        original_price: 120,
-        images: ["https://via.placeholder.com/150"],
-        category: "Category 1",
-        in_stock: true,
-        featured: true,
-        tags: ["tag1", "tag2"],
-        weight: "1kg",
-        origin: "Origin 1",
-        benefits: ["benefit1", "benefit2"],
-        rating: 4.5,
-        reviews: 10,
-        stock_quantity: 10,
-        allowPreorder: true,
-      },
-      quantity: 1,
-    },
-    {
-      product: {
-        id: "2",
-        name: "Product 2",
-        description: "Product 2 description",
-        price: 200,
-        original_price: 220,
-        images: ["https://via.placeholder.com/150"],
-        category: "Category 2",
-        in_stock: true,
-        featured: true,
-        tags: ["tag1", "tag2"],
-        weight: "1kg",
-        origin: "Origin 1",
-        benefits: ["benefit1", "benefit2"],
-        rating: 4.5,
-        reviews: 10,
-        stock_quantity: 10,
-        allowPreorder: true,
-      },
-      quantity: 1,
-    },
-  ];
-  const totalItems = 0;
-  const totalPrice = 0;
+  // Use cart hook
+  const { items, removeFromCart, updateCartQuantity } = useCart();
+  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+  const totalPrice = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-  useEffect(() => {
-    setCount(cartCount);
-  }, [totalItems]);
+  // Transform cart items to the expected format
+  const cartItems: CartItemType[] = items.map((item) => ({
+    product: {
+      id: item.productId,
+      name: item.name,
+      description: "",
+      price: item.price,
+      original_price: item.price,
+      images: item.image ? [item.image] : [""],
+      category: "",
+      in_stock: true,
+      featured: false,
+      tags: [],
+      weight: "",
+      origin: "",
+      benefits: [],
+      rating: 0,
+      reviews: 0,
+      stock_quantity: 0,
+      allowPreorder: false,
+    },
+    quantity: item.quantity,
+  }));
+
+  const handleUpdateQuantity = (productId: string, quantity: number) => {
+    updateCartQuantity(productId, quantity);
+  };
+
+  const handleRemove = (productId: string) => {
+    removeFromCart(productId);
+  };
+
+  const cartCount = totalItems || initialCount;
 
   // Desktop: Use Sheet (side drawer)
   if (isDesktop) {
     return (
       <Sheet>
         <SheetTrigger asChild>
-          <CartTrigger count={count} />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative hover:bg-accent cursor-pointer"
+          >
+            <ShoppingBagIcon className="size-5 cursor-pointer" />
+            <Badge
+              variant="destructive"
+              className="absolute -right-1 -top-1 size-4 rounded-full p-0 text-xs font-semibold text-white flex items-center justify-center min-w-4 min-h-4 text-center"
+              suppressHydrationWarning
+            >
+              {cartCount}
+            </Badge>
+          </Button>
         </SheetTrigger>
         <SheetContent className="w-full sm:max-w-lg flex flex-col">
           <SheetHeader className="border-b pb-4">
@@ -96,9 +96,11 @@ export function CartDrawer({ cartCount }: CartDrawerProps) {
           </SheetHeader>
           <div className="flex-1 overflow-hidden">
             <CartContent
-              items={items}
+              items={cartItems}
               totalItems={totalItems}
               totalPrice={totalPrice}
+              onUpdateQuantity={handleUpdateQuantity}
+              onRemove={handleRemove}
             />
           </div>
         </SheetContent>
@@ -109,7 +111,20 @@ export function CartDrawer({ cartCount }: CartDrawerProps) {
   return (
     <Drawer>
       <DrawerTrigger asChild>
-        <CartTrigger count={count} />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative hover:bg-accent cursor-pointer"
+        >
+          <ShoppingBagIcon className="size-5 cursor-pointer" />
+          <Badge
+            variant="destructive"
+            className="absolute -right-1 -top-1 size-4 rounded-full p-0 text-xs font-semibold text-white flex items-center justify-center min-w-4 min-h-4 text-center"
+            suppressHydrationWarning
+          >
+            {cartCount}
+          </Badge>
+        </Button>
       </DrawerTrigger>
       <DrawerContent className="max-h-[85vh] flex flex-col">
         <DrawerHeader className="border-b pb-4">
@@ -119,9 +134,11 @@ export function CartDrawer({ cartCount }: CartDrawerProps) {
         </DrawerHeader>
         <div className="flex-1 overflow-hidden">
           <CartContent
-            items={items}
+            items={cartItems}
             totalItems={totalItems}
             totalPrice={totalPrice}
+            onUpdateQuantity={handleUpdateQuantity}
+            onRemove={handleRemove}
           />
         </div>
       </DrawerContent>

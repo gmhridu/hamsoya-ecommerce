@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
+import { useResetPassword } from "@/lib/trpc/hooks";
 
 /* -----------------------------
    Validation Schema
@@ -21,8 +22,6 @@ import { toast } from "sonner";
 
 export const ResetPasswordSchema = z
   .object({
-    email: z.string().email("Please enter a valid email address"),
-
     password: z
       .string()
       .min(8, "Password must be at least 8 characters")
@@ -45,13 +44,15 @@ export const ResetPassword = () => {
   const searchParams = useSearchParams();
 
   const email = searchParams.get("email") ?? "";
+  const token = searchParams.get("token") ?? "";
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  const resetPasswordMutation = useResetPassword();
+
   const form = useForm({
     defaultValues: {
-      email,
       password: "",
       confirmPassword: "",
     } as ResetPasswordInput,
@@ -64,17 +65,16 @@ export const ResetPassword = () => {
       const toastId = toast.loading("Resetting password...");
 
       try {
-        /* -----------------------------
-           Dummy API request
-        --------------------------------*/
-
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        await resetPasswordMutation.mutateAsync({
+          token: token,
+          password: value.password,
+        });
 
         toast.success("Password reset successfully", {
           id: toastId,
         });
 
-        router.push("/login");
+        router.push("/login?reset=true");
       } catch (error: any) {
         toast.error(error?.message ?? "Something went wrong", {
           id: toastId,
@@ -87,7 +87,7 @@ export const ResetPassword = () => {
      Field Error Component
   --------------------------------*/
 
-  const FieldError = ({ field }: any) => {
+  const FieldError = ({ field }: { field: any }) => {
     if (!field.state.meta.isTouched) return null;
     if (!field.state.meta.errors.length) return null;
 
@@ -144,7 +144,7 @@ export const ResetPassword = () => {
               {/* PASSWORD */}
 
               <form.Field name="password">
-                {(field) => (
+                {(field: any) => (
                   <div className="space-y-2">
                     <label className="text-sm font-medium">New Password</label>
 
@@ -183,7 +183,7 @@ export const ResetPassword = () => {
               {/* CONFIRM PASSWORD */}
 
               <form.Field name="confirmPassword">
-                {(field) => (
+                {(field: any) => (
                   <div className="space-y-2">
                     <label className="text-sm font-medium">
                       Confirm Password
@@ -234,9 +234,9 @@ export const ResetPassword = () => {
                   <Button
                     type="submit"
                     className="w-full h-11"
-                    disabled={state.isSubmitting}
+                    disabled={state.isSubmitting || resetPasswordMutation.isPending}
                   >
-                    {state.isSubmitting ? (
+                    {resetPasswordMutation.isPending ? (
                       <>
                         <Spinner className="mr-2 size-4" />
                         Resetting Password...

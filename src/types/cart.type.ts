@@ -10,3 +10,19 @@ export interface Cart {
   total: number;
   itemCount: number;
 }
+
+export interface CartType {
+  productId: string;
+  name: string;
+  price: number;
+  image?: string;
+  quantity: number;
+}
+
+export interface BookmarkType {
+  productId: string;
+  name: string;
+  price: number;
+  image?: string;
+  addedAt: number;
+}
