@@ -11,12 +11,16 @@ interface CartContentProps {
   items: CartItem[];
   totalItems: number;
   totalPrice: number;
+  onUpdateQuantity?: (productId: string, quantity: number) => void;
+  onRemove?: (productId: string) => void;
 }
 
 export function CartContent({
   items,
   totalItems,
   totalPrice,
+  onUpdateQuantity,
+  onRemove,
 }: CartContentProps) {
   return (
     <div className="flex h-full flex-col">
@@ -78,9 +82,7 @@ export function CartContent({
                         className="size-8 cursor-pointer transition-all duration-200 hover:bg-destructive/20 hover:border-destructive/40 hover:text-destructive"
                         variant="outline"
                         size="icon"
-                        // onClick={() =>
-                        //   updateItemQuantity(item.product.id, item.quantity - 1)
-                        // }
+                        onClick={() => onUpdateQuantity?.(item.product.id, item.quantity - 1)}
                       >
                         <MinusIcon className="size-3" />
                       </Button>
@@ -93,9 +95,7 @@ export function CartContent({
                         className="size-8 cursor-pointer transition-all duration-200 hover:bg-primary/20 hover:border-primary/40 hover:text-primary"
                         variant="outline"
                         size="icon"
-                        // onClick={() =>
-                        //   updateItemQuantity(item.product.id, item.quantity + 1)
-                        // }
+                        onClick={() => onUpdateQuantity?.(item.product.id, item.quantity + 1)}
                       >
                         <PlusIcon className="size-3" />
                       </Button>
@@ -105,7 +105,7 @@ export function CartContent({
                       variant="ghost"
                       size="icon"
                       className="size-8 cursor-pointer text-destructive hover:text-destructive hover:bg-destructive/20 transition-all duration-200"
-                      // onClick={() => removeItem(item.product.id)}
+                      onClick={() => onRemove?.(item.product.id)}
                     >
                       <Trash2Icon className="size-4" />
                     </Button>

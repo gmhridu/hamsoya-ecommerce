@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 
@@ -23,8 +23,13 @@ import {
 } from "lucide-react";
 
 import Link from "next/link";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import Image from "next/image";
+import { ProfileImageUpload } from "./profile-image-upload";
+import { useLogin, useRegister } from "@/lib/trpc/hooks";
+import { Label } from "@/components/ui/label";
+import { useProfileImageStore } from "@/store/use-profile-image";
+import { Spinner } from "@/components/ui/spinner";
 
 /* -----------------------------
    Validation Schemas
@@ -32,7 +37,7 @@ import Image from "next/image";
 
 const LoginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: z.string().min(1, "Password is required"),
 });
 
 const RegisterSchema = z
@@ -42,6 +47,7 @@ const RegisterSchema = z
     password: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string(),
     phone_number: z.string().optional(),
+    profile_image_url: z.string().optional(),
   })
   .refine((d) => d.password === d.confirmPassword, {
     message: "Passwords don't match",
@@ -53,10 +59,35 @@ type RegisterInput = z.infer<typeof RegisterSchema>;
 
 export const Login = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Get profile image from store
+  const profileImageUrl = useProfileImageStore((s) => s.url);
 
   const [activeTab, setActiveTab] = useState<"login" | "signup">("login");
+  const [loginShowPassword, setLoginShowPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Get login and register mutations
+  const loginMutation = useLogin();
+  const registerMutation = useRegister();
+
+  // Check for verification status from URL
+  const verified = searchParams.get("verified");
+  const reset = searchParams.get("reset");
+
+  // Show toast messages from URL params
+  useState(() => {
+    if (verified === "true") {
+      toast.success("Email verified successfully! Please login.");
+    }
+    if (reset === "true") {
+      toast.success(
+        "Password reset successfully! Please login with your new password.",
+      );
+    }
+  });
 
   /* -----------------------------
      LOGIN FORM
@@ -76,7 +107,10 @@ export const Login = () => {
       const toastId = toast.loading("Signing in...");
 
       try {
-        await new Promise((r) => setTimeout(r, 1200));
+        await loginMutation.mutateAsync({
+          email: value.email,
+          password: value.password,
+        });
 
         toast.success("Login successful 🎉", {
           id: toastId,
@@ -84,9 +118,9 @@ export const Login = () => {
 
         router.replace("/");
       } catch (error: any) {
-        toast.error("Login failed", {
+        toast.error(error.message || "Login failed", {
           id: toastId,
-          description: error?.message ?? "Invalid email or password",
+          description: error.message,
         });
       }
     },
@@ -103,6 +137,7 @@ export const Login = () => {
       password: "",
       confirmPassword: "",
       phone_number: "",
+      profile_image_url: "",
     } as RegisterInput,
 
     validators: {
@@ -113,9 +148,16 @@ export const Login = () => {
       const toastId = toast.loading("Creating account...");
 
       try {
-        await new Promise((r) => setTimeout(r, 1500));
+        await registerMutation.mutateAsync({
+          name: value.name,
+          email: value.email,
+          password: value.password,
+          phoneNumber: value.phone_number || undefined,
+          // Use profile image from store if available
+          profileImageUrl: profileImageUrl || undefined,
+        });
 
-        toast.success("Account created 🎉", {
+        toast.success("Account created! Please check your email to verify.", {
           id: toastId,
         });
 
@@ -123,9 +165,9 @@ export const Login = () => {
           `/verify-email?email=${encodeURIComponent(value.email)}`,
         );
       } catch (error: any) {
-        toast.error("Registration failed", {
+        toast.error(error.message || "Registration failed", {
           id: toastId,
-          description: error?.message,
+          description: error.message,
         });
       }
     },
@@ -191,7 +233,7 @@ export const Login = () => {
                 <loginForm.Field name="email">
                   {(field) => (
                     <div className="space-y-2">
-                      <label>Email</label>
+                      <Label>Email</Label>
 
                       <div className="relative">
                         <MailIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -213,7 +255,172 @@ export const Login = () => {
                 <loginForm.Field name="password">
                   {(field) => (
                     <div className="space-y-2">
-                      <label>Password</label>
+                      <Label>Password</Label>
+
+                      <div className="relative">
+                        <LockIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+
+                        <Input
+                          type={loginShowPassword ? "text" : "password"}
+                          placeholder="********"
+                          className="pl-10"
+                          value={field.state.value}
+                          onBlur={field.handleBlur}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setLoginShowPassword(!loginShowPassword)
+                          }
+                          className="absolute right-3 top-1/2 -translate-y-1/2"
+                        >
+                          {showPassword ? (
+                            <EyeOffIcon size={16} />
+                          ) : (
+                            <EyeIcon size={16} />
+                          )}
+                        </button>
+                      </div>
+
+                      <FieldError field={field} />
+                    </div>
+                  )}
+                </loginForm.Field>
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={loginMutation.isPending}
+                >
+                  {loginMutation.isPending ? (
+                    <>
+                      <Spinner />
+                      Signing in...
+                    </>
+                  ) : (
+                    "Sign In"
+                  )}
+                </Button>
+
+                <div className="text-center">
+                  <Link
+                    href="/forgot-password"
+                    className="text-sm text-primary"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+              </form>
+            </TabsContent>
+
+            {/* REGISTER */}
+
+            <TabsContent value="signup" className="mt-6">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  registerForm.handleSubmit();
+                }}
+                className="space-y-5"
+              >
+                <registerForm.Field name="name">
+                  {(field) => (
+                    <div className="space-y-2">
+                      <Label>Full Name</Label>
+
+                      <div className="relative">
+                        <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+
+                        <Input
+                          className="pl-10"
+                          placeholder="John Doe"
+                          type="text"
+                          value={field.state.value}
+                          onBlur={field.handleBlur}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                        />
+                      </div>
+
+                      <FieldError field={field} />
+                    </div>
+                  )}
+                </registerForm.Field>
+
+                <registerForm.Field name="email">
+                  {(field) => (
+                    <div className="space-y-2">
+                      <Label>Email</Label>
+
+                      <div className="relative">
+                        <MailIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+
+                        <Input
+                          className="pl-10"
+                          type="email"
+                          placeholder="john@example.com"
+                          value={field.state.value}
+                          onBlur={field.handleBlur}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                        />
+                      </div>
+
+                      <FieldError field={field} />
+                    </div>
+                  )}
+                </registerForm.Field>
+
+                <registerForm.Field name="phone_number">
+                  {(field) => (
+                    <div className="space-y-2">
+                      <Label>Phone Number</Label>
+
+                      <div className="relative">
+                        <PhoneIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+
+                        <Input
+                          className="pl-10"
+                          type="tel"
+                          placeholder="Enter your phone number"
+                          value={field.state.value}
+                          onBlur={field.handleBlur}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                        />
+                      </div>
+
+                      <FieldError field={field} />
+                    </div>
+                  )}
+                </registerForm.Field>
+
+                <registerForm.Field name="profile_image_url">
+                  {(field) => (
+                    <div className="space-y-2">
+                      <Label>
+                        {" "}
+                        Profile Picture{" "}
+                        <span className="text-muted-foreground">
+                          (Optional)
+                        </span>
+                      </Label>
+
+                      <div className="flex flex-col items-center justify-center py-4 space-y-2">
+                        <ProfileImageUpload size="lg" preserveOnUnmount />
+                        <p className="text-xs text-muted-foreground">
+                          Click the circle to upload or drag an image here
+                        </p>
+                      </div>
+
+                      <FieldError field={field} />
+                    </div>
+                  )}
+                </registerForm.Field>
+
+                <registerForm.Field name="password">
+                  {(field) => (
+                    <div className="space-y-2">
+                      <Label>Password</Label>
 
                       <div className="relative">
                         <LockIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -243,83 +450,12 @@ export const Login = () => {
                       <FieldError field={field} />
                     </div>
                   )}
-                </loginForm.Field>
-
-                <Button type="submit" className="w-full">
-                  Sign In
-                </Button>
-
-                <div className="text-center">
-                  <Link
-                    href="/forgot-password"
-                    className="text-sm text-primary"
-                  >
-                    Forgot password?
-                  </Link>
-                </div>
-              </form>
-            </TabsContent>
-
-            {/* REGISTER */}
-
-            <TabsContent value="signup" className="mt-6">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  registerForm.handleSubmit();
-                }}
-                className="space-y-5"
-              >
-                <registerForm.Field name="name">
-                  {(field) => (
-                    <div className="space-y-2">
-                      <label>Full Name</label>
-
-                      <div className="relative">
-                        <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-
-                        <Input
-                          className="pl-10"
-                          placeholder="John Doe"
-                          type="text"
-                          value={field.state.value}
-                          onBlur={field.handleBlur}
-                          onChange={(e) => field.handleChange(e.target.value)}
-                        />
-                      </div>
-
-                      <FieldError field={field} />
-                    </div>
-                  )}
                 </registerForm.Field>
 
-                <registerForm.Field name="email">
+                <registerForm.Field name="confirmPassword">
                   {(field) => (
                     <div className="space-y-2">
-                      <label>Email</label>
-
-                      <div className="relative">
-                        <MailIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-
-                        <Input
-                          className="pl-10"
-                          type="email"
-                          placeholder="john@example.com"
-                          value={field.state.value}
-                          onBlur={field.handleBlur}
-                          onChange={(e) => field.handleChange(e.target.value)}
-                        />
-                      </div>
-
-                      <FieldError field={field} />
-                    </div>
-                  )}
-                </registerForm.Field>
-
-                <registerForm.Field name="password">
-                  {(field) => (
-                    <div className="space-y-2">
-                      <label>Password</label>
+                      <Label>Confirm Password</Label>
 
                       <div className="relative">
                         <LockIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -340,7 +476,7 @@ export const Login = () => {
                           }
                           className="absolute right-3 top-1/2 -translate-y-1/2"
                         >
-                          {showPassword ? (
+                          {showConfirmPassword ? (
                             <EyeOffIcon size={16} />
                           ) : (
                             <EyeIcon size={16} />
@@ -353,8 +489,19 @@ export const Login = () => {
                   )}
                 </registerForm.Field>
 
-                <Button type="submit" className="w-full">
-                  Create Account
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={registerMutation.isPending}
+                >
+                  {registerMutation.isPending ? (
+                    <>
+                      <Spinner className="ml-2" />
+                      Creating account...
+                    </>
+                  ) : (
+                    "Create Account"
+                  )}
                 </Button>
 
                 <Separator />
